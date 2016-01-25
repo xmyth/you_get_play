@@ -32,7 +32,7 @@ class YouGetPlay(QtGui.QWidget):
 
         self.tray.setContextMenu(self.menu)
         self.tray.setToolTip('you-get play')
-        self.history = []
+        self.history = {'urls':[], 'titles':{}}
         self.load_history()
 
     def close(self):
@@ -51,39 +51,58 @@ class YouGetPlay(QtGui.QWidget):
         with open(self.__HISTORY_FILENAME__, 'wb') as f:
             pickle.dump(self.history, f, -1)
 
-    def append_history(self, url):
-        if len(self.history) > 10:
-            self.history = self.history[1:]
-        self.history.append(url)
+    def append_history(self, title, url):
+        if url in self.history['urls']:
+            self.history['urls'].remove(url)
+            del self.history['titles'][url]
+        if len(self.history['urls']) > 10:
+            del self.history['titles'][self.history['urls'][0]]
+            self.history['urls'] = self.history['urls'][1:]
+        self.history['urls'].append(url)
+        self.history['titles'][url] = title
         self.update_history_menu()
 
     def update_history_menu(self):
         self.historyMenu.clear()
         last = None
-        for url in self.history:
-            action = QtGui.QAction(url, self, triggered=lambda: self.play(url))
+        for url in self.history['urls']:
+            title = self.history['titles'][url]
+            action = QtGui.QAction(title, self, triggered=lambda: self.play(title, url))
             self.historyMenu.insertAction(last, action)
             last = action
 
-    def play(self, url):
-        p = subprocess.Popen(['you-get', '-p', 'mpv', url])
-        p.wait()
-        if url in self.history:
-            self.history.remove(url)
-        self.append_history(url)
+    def play(self, title, url):
+        subprocess.run(['you-get', '-p', 'mpv', url], stdout=subprocess.PIPE)
+        self.append_history(title, url)
+
+    def get_title(self, url):
+        site, title = (None, None)
+        p = subprocess.run(['you-get','-i',url], stdout=subprocess.PIPE)
+        for line in p.stdout.splitlines():
+            try:
+                line = line.decode('utf-8')
+            except:
+                try:
+                    line = line.decode('gbk')
+                except:
+                    pass
+            if line.lower().startswith('site:'):
+                site = line[5:].strip()
+                
+            if line.lower().startswith('title:'):
+                title = line[6:].strip()
+        return '@'.join([title,site])   
 
     def onClipChanged(self):
         if(QtGui.QApplication.clipboard().mimeData().hasText()):
             text = QtGui.QApplication.clipboard().text()
-            print(text)
             if self.enableAction.isChecked():
                 try:
                     urllib.request.urlopen(text)
-                    print('Playing ... ')
+                    title = self.get_title(text)
                     if QtGui.QSystemTrayIcon.supportsMessages():
-                        self.tray.showMessage('Now Playing ...', text)
-                    self.play(text)
-                    print('End')
+                        self.tray.showMessage('Now Playing ...', title)
+                    self.play(title, text)
                 except Exception as e:
                     print(e)
 
