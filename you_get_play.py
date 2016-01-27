@@ -2,6 +2,7 @@ import sys
 import subprocess
 import urllib.request
 import pickle
+from functools import partial
 from PyQt4 import QtGui
 
 
@@ -67,7 +68,7 @@ class YouGetPlay(QtGui.QWidget):
         last = None
         for url in self.history['urls']:
             title = self.history['titles'][url]
-            action = QtGui.QAction(title, self, triggered=lambda: self.play(title, url))
+            action = QtGui.QAction(title, self, triggered=partial(self.play, title, url))
             self.historyMenu.insertAction(last, action)
             last = action
 
